@@ -24,9 +24,6 @@ public:
     glm::vec2 Velocity();
 
     void SetSeekBehaviour(glm::vec2 pTarget);
-    void SetFleeBehaviour(glm::vec2 pTarget);
-    void SetPursueAgentBehaviour(Agent* pTarget);
-    void SetEvadeAgentBehaviour(Agent* pTarget);
 
     void Update(float pSeconds);
 };
