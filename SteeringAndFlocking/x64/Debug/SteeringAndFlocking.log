@@ -1,0 +1,2 @@
+﻿  App.cpp
+C:\Users\Simon\source\repos\700110\SteeringAndFlocking\SteeringAndFlocking\source\App.cpp(7,10): fatal error C1083: Cannot open include file: 'GL/glew.h': No such file or directory

@@ -1,0 +1,4 @@
+﻿  World.cpp
+C:\Users\Simon\source\repos\700110\SteeringAndFlocking\SteeringAndFlocking\source\World.cpp(15,23): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Simon\source\repos\700110\SteeringAndFlocking\SteeringAndFlocking\source\World.cpp(34,23): warning C4018: '<': signed/unsigned mismatch
+  SteeringAndFlocking.vcxproj -> C:\Users\Simon\source\repos\700110\SteeringAndFlocking\Debug\SteeringAndFlocking.exe
