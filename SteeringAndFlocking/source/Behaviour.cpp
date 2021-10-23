@@ -8,9 +8,6 @@
     glm::vec2 SeekBehaviour::GetSteeringForce()
     {
         glm::vec2 steeringForce = m_Target - m_Agent->Position();
-        // get the desired velocity and set desired speed to be max speed
-        glm::vec2 desiredVelocity = glm::normalize(steeringForce);
-        desiredVelocity *= m_Agent->MAX_SPEED;
-
-        return desiredVelocity;
+        
+        return steeringForce;
     }
