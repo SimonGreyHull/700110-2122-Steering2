@@ -44,8 +44,7 @@ public:
 };
 ```
 
-Next, look at the Agent class. The agent has a position and a velocity, a pointer to the world so that it can find out important things about the world, like the width and height of the world and
-a pointer to it's current behaviour.
+Next, look at the Agent class. The agent has a position and a velocity, a pointer to the world so that it can find out important things about the world, like the width and height of the world and a pointer to it's current behaviour.
 
 ``` cpp
 class Agent
@@ -191,26 +190,37 @@ Test your code is working as expected. You should be able to click on an agent a
 
 ### Know your next commit!
 
-Now add SeekBehaviour to seek a point when you select an agent - the point can be fixed, or random.
+Now you should adapt the application to enable you to add the seek behaviour to the selectedAgent. Add the following code at the end of the AgentIMGui method. This will add some controls to the user interface to select an x and a y value. Then, when the Seek button is pressed the SetSeekBehaviour method will be called on the selected agent, passing the current values in from the GUI.
+
+``` cpp
+    std::string targetXStr = "x";
+    static int x = 0;
+    ImGui::DragInt("target x", &x, 1, -50, 50);
+    std::string targetYStr = "y";
+    static int y = 0;
+    ImGui::DragInt("target y", &y, 1, -50, 50);
+    if (ImGui::Button("Seek"))
+    {
+        pAgent.SetSeekBehaviour(glm::vec2(x, y));
+    }
+```
 
 ### Test and commit your code to source control
 
-Test your code is working as expected. Now might be a good  time to experiment with ImGUI to output useful information and even allow you to build new SeekBehaviours at runtime.
-
-Once you're done testing commit with a suitable message like "Added seek behaviour to agent".
+Test your code is working as expected. Once you're done testing commit with a suitable message like "Added seek behaviour to agent".
 
 ### Know your next commit!
 
 You may notice some odd behaviour with your agent. This is probably because when the SeekBehaviour calculates the direction to the seek target it doesn't take into account that the world wraps around itself.
 
-Add a method to the World to get the shortest distance, taking into account that the distance might cross the world's "edge" to wrap around to the other side.
+Add a method to the World to get the shortest distance, taking into account that the distance might cross the world's "edge" to wrap around to the other side. 
+This code works by checking the "natural" distance between two points, and the distance from the pFrom point to the pTo point crossing the left side, right side, top and bottom. This could definitely be optimised by calculating which sides the pTo point is closest to.
 
 ``` cpp
 glm::vec2 World::GetShortestWrappedDirection(const glm::vec2& pFrom, const glm::vec2& pTo)
 {
     /*
         There will be more efficent ways to reduce this calculation.
-
         For expediency of writing we check the length of the current world and
         all 9 adjacent "wrapped worlds".
     */
@@ -259,46 +269,108 @@ glm::vec2 World::GetShortestWrappedDirection(const glm::vec2& pFrom, const glm::
 ```
 This is a very brute force method, so if you like a challenge you may want to optimise this.
 
-Modify the SeekBehaviour to use this method to calculate the shortest direction to the target.
-
-Replace the line
+Next modify the SeekBehaviour to use this method to calculate the shortest direction to the target. Replace the line that calculates the direction from the agent to the target;
 
 ``` cpp
 glm::vec2 steeringForce = m_Target - m_Agent->Position();
 ```
 
-with the line
+With this line, that calls the method you just wrote;
 
 ``` cpp
 glm::vec2 steeringForce = m_World->GetShortestWrappedDirection(m_Agent->Position(), m_Target);
 ```
 ### Test and commit your code to source control
 
-Test your code and once you are convinced that it is working commit to source control with a suitable message line "added wrap around behaviour and applied in SeekBehaviour"
+Test your code and once you are convinced that it is working. You should experiment by placing the target close to the edges and corners of the world. When you are convinced your code works commit to source control with a suitable message line "added wrap around behaviour and applied in SeekBehaviour"
 
 ### Know your next commit!
 
 Next add the FleeBehaviour. Remember, the Flee Behaviour is very similar to the seek behaviour, but the Flee Behaviour moves away from the target, and not towards it.
 
+To do this you will need to take the following steps:
+   - Create a new FleeBehaviour class that inherits the Behaviour class. This will be very similar to the SeekBehaviour class.
+   - Write the GetSteeringForce method to calculate a steering force to move the agent away from the target.
+   - Write a SetFleeBehaviour method in the Agent class to set the behaviour of the agent to flee.
+   - In the App.cpp file modify the AgentIMGui by adding another button that says "Flee" instead of "Seek". When that button is pressed call the SetFleeBehaviour method on the selectedAgent. You can reuse the existing UI implementation to select a target.
+
 ### Test and commit your code to source control
 
-Test your code and commit it with an appropriate message.
+Test your code and commit it with an appropriate message like "Implemented FleeBehaviour"
 
 ### Know your next commit!
 
 Next add PursueAgentBehaviour. The pursue agent behaviour will need a pointer to an agent to pursue. Then each update it calculates the position that the agent will be in a short time in the future (say 1/4 second) and uses that are the target.
 After that, the behaviour is the same as the seek behaviour.
 
+To do this take the following steps:
+    - Create a new PursueAgentBehaviour class that inherits the Behaviour class
+    - Write the GetSteeringForce method to calculate a steering force
+    - Write a SetPursueAgentBehaviour method in the Agent class
+    - Modigy the GUI in the App.cpp file
+    
+To create the PursueAgentBehaviour class add some code like this:
+
+``` cpp
+class PursueAgentBehaviour : public Behaviour
+{
+private:
+
+    Agent* m_Target;
+
+public:
+    PursueAgentBehaviour(Agent* pTarget, Agent* pAgent, World* pWorld);
+
+    glm::vec2 GetSteeringForce();
+};
+```
+Note that the agent doesn't have a vec2 as a target, but instead has a pointer to the agent they are pursuing.
+
+Next write the GetSteeringForce method. This should calculate a target that is where the m_Target agent will be in 0.25 seconds.
+
+``` cpp
+    glm::vec2 PursueAgentBehaviour::GetSteeringForce()
+    {
+        glm::vec2 target = m_Target->Position() + (m_Target->Velocity() * 0.25f);
+        glm::vec2 steeringForce = m_World->GetShortestWrappedDirection(m_Agent->Position(), target);
+
+        return steeringForce;
+    }
+```
+
+Write some code to set the behaviour in the Agent class. This will be very similar to existing code, and is a sure sign that this could be refactored. 
+
+The final step is to add the ability to add the behaviour to the selected agent. The code below will select the first agent in the world's list of agent (that is not the currently selected agent) and use that agent as the target.
+
+``` cpp
+    if (ImGui::Button("Pursue Agent"))
+    {
+        Agent* target;
+        for (int i = 0; i < world.Agents().size(); i++)
+        {
+            if (selectedAgent != world.Agents()[i])
+            {
+                selectedAgent->SetPursueAgentBehaviour(world.Agents()[i]);
+            }
+        }
+    }
+```
 ### Test and commit your code to source control
 
-Test your code and commit it with an appropriate message.
+Test your code and commit it with an appropriate message like "Added pursue agent behaviour"
 
 ### Know your next commit!
 
-Next add EvadeAgentBehaviour. This is similar to the pursue agent, but it flees from the point that the agent will be in a short time in the future!
+Next add EvadeAgentBehaviour. This is similar to the pursue agent behaviour, but it flees from the point that the agent will be in a short time in the future!
+
+To do this take the following steps:
+    - Create a new EvadeAgentBehaviour class that inherits the Behaviour class
+    - Write the GetSteeringForce method to calculate a steering force
+    - Write a SetEvadeAgentBehaviour method in the Agent class
+    - Modigy the GUI in the App.cpp file
 
 ### Test and commit your code to source control
 
-Test your code and commit it with an appropriate message.
+Test your code and commit it with an appropriate message like "Added evade agent behaviour"
 
 
