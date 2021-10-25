@@ -304,10 +304,10 @@ Next add PursueAgentBehaviour. The pursue agent behaviour will need a pointer to
 After that, the behaviour is the same as the seek behaviour.
 
 To do this take the following steps:
-    - Create a new PursueAgentBehaviour class that inherits the Behaviour class
-    - Write the GetSteeringForce method to calculate a steering force
-    - Write a SetPursueAgentBehaviour method in the Agent class
-    - Modigy the GUI in the App.cpp file
+- Create a new PursueAgentBehaviour class that inherits the Behaviour class
+- Write the GetSteeringForce method to calculate a steering force
+- Write a SetPursueAgentBehaviour method in the Agent class
+- Modigy the GUI in the App.cpp file
     
 To create the PursueAgentBehaviour class add some code like this:
 
@@ -345,7 +345,6 @@ The final step is to add the ability to add the behaviour to the selected agent.
 ``` cpp
     if (ImGui::Button("Pursue Agent"))
     {
-        Agent* target;
         for (int i = 0; i < world.Agents().size(); i++)
         {
             if (selectedAgent != world.Agents()[i])
@@ -364,13 +363,190 @@ Test your code and commit it with an appropriate message like "Added pursue agen
 Next add EvadeAgentBehaviour. This is similar to the pursue agent behaviour, but it flees from the point that the agent will be in a short time in the future!
 
 To do this take the following steps:
-    - Create a new EvadeAgentBehaviour class that inherits the Behaviour class
-    - Write the GetSteeringForce method to calculate a steering force
-    - Write a SetEvadeAgentBehaviour method in the Agent class
-    - Modigy the GUI in the App.cpp file
+- Create a new EvadeAgentBehaviour class that inherits the Behaviour class
+- Write the GetSteeringForce method to calculate a steering force
+- Write a SetEvadeAgentBehaviour method in the Agent class
+- Modigy the GUI in the App.cpp file
 
 ### Test and commit your code to source control
 
 Test your code and commit it with an appropriate message like "Added evade agent behaviour"
 
+### Know your next commit!
 
+The next step is to add some flocking behaviour. Flocking is a behaviour in which the steering force is calculated based upon the relative positions and velocities of the surrounding agents in the immediate neighbourhood.
+
+The first step towards flocking is to create that neighbourhood. In the agent class add a list of pointers to the surrounding agents.
+
+``` cpp
+    std::vector <Agent*> m_Neighbours;
+```
+
+For similicities sake we will also add a public method that allows access to that list. An alternative strategy would be to simply make the data member public.
+
+``` cpp
+    std::vector<Agent*> Neighbours() { return &m_Neighbours; }
+```
+
+Flocking requires four new behaviours to be added. They are
+- AlignmentBehaviour which will align the current agent velocity to that of it's neighbours
+- CohesionBehaviour which will push an agent towards the average position of it's neighbours
+- SeparationBehaviour which will push an agent away from individual neighbours
+- FlockingBehaviour which will calculate a weighted sum of the previous three behaviours
+
+Create a FlockingBehaviour class that inherits from the Behaviour class. This will include three other behaviours that have not been created yet, and some static members that are the same for all agents that implement the flocking behaviour.
+
+``` cpp
+class FlockingBehaviour : public Behaviour
+{
+private:
+
+    AlignmentBehaviour m_Alignment;
+    CohesionBehaviour m_Cohesion;
+    SeparationBehaviour m_Separation;
+
+    static float s_AlignmentWeighting;
+    static float s_CohesionWeighting;
+    static float s_SeparationWeighting;
+    static float s_NeighbourhoodRadius;
+public:
+    FlockingBehaviour(Agent* pAgent, World* pWorld);
+
+    static float& NeighbourhoodRadius() { return s_NeighbourhoodRadius; }
+    static float& AlignmentWeighting() { return s_AlignmentWeighting; }
+    static float& CohesionWeighting() { return s_CohesionWeighting; }
+    static float& SeparationWeighting() { return s_SeparationWeighting; }
+
+    glm::vec2 GetSteeringForce();
+};
+```
+
+Write the FlockingBehaviour GetSteeringForce method to call each of the other behaviours and weight it according to the weighting.
+
+``` cpp
+    glm::vec2 FlockingBehaviour::GetSteeringForce()
+    {
+        glm::vec2 steeringForce = m_Alignment.GetSteeringForce() * s_AlignmentWeighting
+            + m_Cohesion.GetSteeringForce() * s_CohesionWeighting
+            + m_Separation.GetSteeringForce() * s_SeparationWeighting;
+
+        return steeringForce;
+    }
+```
+
+Enable modification of the static variables (that are shared by all FlockingBehaviour instances) by adding the following code to the renderImGui method
+
+``` cpp
+    ImGui::DragFloat("neighbourhood", &FlockingBehaviour::NeighbourhoodRadius(), 1, 0, 25);
+    ImGui::DragFloat("alignment", &FlockingBehaviour::AlignmentWeighting(), 0.05f, 0.f, 1.f);
+    ImGui::DragFloat("cohesion", &FlockingBehaviour::CohesionWeighting(), 0.05f, 0.f, 1.f);
+    ImGui::DragFloat("separation", &FlockingBehaviour::SeparationWeighting(), 0.05f, 0.f, 1.f);
+```
+
+As we want to change this value later through the UI add a get method that returns a reference to this data member. Again, an alternative strategy would be to simple make the data member public.
+
+We've done a lot of work so far, there are still three more tasks remaining. We need to
+- Calculate the neighbourhood of each agent
+- Calculate the steering forces for each behaviour
+- Add a lot of agents to the scene with flocking behaviour
+
+Determining the agent neighbourhood is an expensive task, and needs to be done before the behaviour steering force is calculated. For this reason it is done in the world UpdatePhysics method. At the start of that method clear the list of neighbours for all agents and then calculate which agents are neighbours.
+
+``` cpp
+    for (int i = 0; i < m_Agents.size(); i++)
+    {
+        m_Agents[i]->Neighbours().clear();
+    }
+
+    float neighbourhoodRadiusSqrd = FlockingBehaviour::NeighbourhoodRadius() * FlockingBehaviour::NeighbourhoodRadius();
+
+    for (int i = 0; i < m_Agents.size(); i++)
+    {
+        for (int j = i + 1; j < m_Agents.size(); j++)
+        {
+            if (glm::length2(m_Agents[i]->Position() - m_Agents[j]->Position()) < neighbourhoodRadiusSqrd)
+            {
+                m_Agents[i]->Neighbours().push_back(m_Agents[j]);
+                m_Agents[j]->Neighbours().push_back(m_Agents[i]);
+            }
+        }
+    }
+```
+
+Next add the GetSteeringForce method for the AlignmentBehaviour. The AlignmentBehaviour is a force that tries to align the current agent's velocity with that of its neighbours.
+
+``` cpp
+    glm::vec2 AlignmentBehaviour::GetSteeringForce()
+    {
+        glm::vec2 averageVelocity = glm::vec2(0, 0);
+
+        for (unsigned int i = 0; i < m_Agent->Neighbours().size(); i++)
+        {
+            averageVelocity += m_Agent->Neighbours()[i]->Velocity();
+        }
+        averageVelocity /= m_Agent->Neighbours().size();
+
+        glm::vec2 steeringForce = averageVelocity - m_Agent->Velocity();
+
+        return steeringForce;
+    }
+```
+
+and the CohesionBehaviour
+
+``` cpp
+    glm::vec2 CohesionBehaviour::GetSteeringForce()
+    {
+        glm::vec2 averagePosition = glm::vec2(0, 0);
+
+        for (unsigned int i = 0; i < m_Agent->Neighbours().size(); i++)
+        {
+            averagePosition += m_Agent->Neighbours()[i]->Position();
+        }
+        averagePosition /= m_Agent->Neighbours().size();
+
+        glm::vec2 steeringForce = averagePosition - m_Agent->Position();
+
+        return steeringForce;
+    }
+```
+
+and the SeparationBehaviour. The separation behaviour looks at each individual agent in the neighbourhood, and creates aforce that is inversely proporional to the distance between the two agents, so agents that are very close to one another have a far greater effect than those that are further apart.
+
+```cpp
+    glm::vec2 SeparationBehaviour::GetSteeringForce()
+    {
+        glm::vec2 steeringForce = glm::vec2(0, 0);
+        glm::vec2 fromOtherAgent;
+
+        for (unsigned int i = 0; i < m_Agent->Neighbours().size(); i++)
+        {
+            fromOtherAgent = m_Agent->Position() - m_Agent->Neighbours()[i]->Position();
+            float distance = fromOtherAgent.length();
+            steeringForce += glm::normalize(fromOtherAgent) / distance;
+        }
+
+        return steeringForce;
+    }
+```
+
+Finally, add a lot of agents to the world! You can do this in the main method using something like this. Remember to set the flocking behaviour to the agent. (You will also have to add this method to the Agent class).
+
+``` cpp
+    for (int i = -20; i < 20; i++)
+    {
+        for (int j = -20; j < 20; j++)
+        {
+            world.AddAgent(glm::vec2(i, j), glm::vec2(0, 0));
+        }
+    }
+   
+    for (unsigned int i = 0; i < world.Agents().size(); i++)
+    {
+        world.Agents()[i]->SetFlockingBehaviour();
+    } 
+```
+
+### Test and commit your code to source control
+
+Test your code. If it seems to be working as expected then commit it with an appropriate message like "Added flocking behaviour"
